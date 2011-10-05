@@ -1,0 +1,252 @@
+#!/usr/bin/perl
+
+use strict;
+use IO::Compress::Gzip qw(gzip);
+use IO::Uncompress::Gunzip qw(gunzip);
+use MIME::Base64;
+use MIME::Parser;
+
+# Constants
+my $CAP_TYPE = "application/cap+xml";
+
+# Prepare and output MIME header
+# Inputs:
+#  0 Alert body
+#  1 GZIP flag (0=none, 1=gzip)
+#  2 Alert token
+sub mime_prepare($$$) {
+    my ($alert, $gzip, $token) = @_;
+
+    my %headers = ("Content-Type" => $CAP_TYPE);
+    my $body = $alert;
+
+    # If the alert needs to be GZIPped, gzip and base64
+    if ($gzip eq 1) {
+        $headers{"Content-Encoding"} = "gzip";
+        $headers{"Content-Transfer-Encoding"} = "base64";
+        
+        gzip \$alert => \$body;
+        $body = encode_base64($body);
+    }
+
+    if ($token) {
+        $headers{"Alert-Token"} = $token;
+    }
+
+    my $entity = "";
+    foreach my $field (keys %headers) {
+        $entity .= "$field: $headers{$field}\r\n";
+    }
+    $entity .= "\r\n$body";
+    return $entity;
+}
+
+# Sign with OpenSSL
+# openssl cms -sign -in alert.txt -signer cert.pem -nocerts -keyid
+# Inputs: 
+#  0 File name for signing certificate/key
+#  1 Alert body
+#  2 GZIP flag (0=none, 1=gzip)
+#  3 Alert token
+sub sign_alert($$$$) {
+    my ($keyfile, $alert, $gzip, $token) = @_;
+
+    # Wrap the alert as a MIME entity
+    my $entity = mime_prepare($alert, $gzip, $token);
+
+    # Write the MIME entity to be signed out to a temporary file
+    my $entityfile = `mktemp alert-encoding-tmp-XXX`;
+    chomp $entityfile;
+    open(ENTITY, ">$entityfile");
+    print ENTITY $entity;
+    close(ENTITY);
+
+    # Use the openssl command-line utility to sign the MIME entity
+    open(OPENSSL, "openssl cms -sign -in $entityfile -signer $keyfile -nocerts -keyid |");
+    my $smime = "";
+    while (<OPENSSL>) { $smime .= $_; }
+    close (OPENSSL);
+
+    # Clean things up (removing some cruft that OpenSSL adds)
+    `rm $entityfile`;
+    $smime =~ s/MIME-Version: 1.0\n//;
+    $smime =~ s/This is an S\/MIME signed message\n\n//;
+    
+    return $smime;
+}
+
+# Verify using OpenSSL
+# openssl cms -verify -in sample.signed.bad -certfile cert.pem -CAfile cert.pem  2>&1 >/dev/null
+# Inputs: 
+#  0 File name for verifying certificate
+#  1 File name for trusted CA certificates
+#  2 S/MIME content to be verified
+#  3 White space separated list of tokens
+# Outputs:
+#  0 Alert content
+#  1 Verification status (0=invalid, 1=valid)
+#
+#  Call in scalar context to just get result: $result = verify_alert(...)
+#  Call in scalar context to also get alert: ($alert, $result) = verify_alert(...)
+sub verify_alert($$$$) {
+    my ($certfile, $cafile, $smime, $tokenlist) = @_;
+
+    # Parse MIME object
+    open(SMIME, "<",  \$smime);
+    my $parser = new MIME::Parser;
+    $parser->output_under("/tmp");
+    my $entity = $parser->parse(\*SMIME);
+    close(SMIME);
+
+    # Pull some basic info
+    my $alertpart = $entity->parts(0);
+    my $type = $alertpart->head->get("Content-Type");
+    my $enc = $alertpart->head->get("Content-Encoding");
+    my $tenc = $alertpart->head->get("Content-Transfer-Encoding");
+    my $token = $alertpart->head->get("Alert-Token");
+    my $body = $alertpart->body_as_string;
+    chomp ($type, $enc, $tenc, $token, $body);
+    
+    # Basic checks; if we fail these, we return nothing
+    if (($type ne $CAP_TYPE) || (($enc eq "gzip")&&($tenc ne "base64")) || !$body) { 
+        print STDERR "Failed content-type / encoding check\n";
+        print STDERR "[$type] [$enc] [$tenc] [$body]\n";
+        return (undef, 0); 
+    }
+
+    # After this, we'll return the alert, so we need to decode it
+    my $alert = $body;
+    if (($enc eq "gzip")&&($tenc eq "base64")) {
+        $body = decode_base64($body);
+        gunzip \$body => \$alert;
+    }
+
+    # Token check; if we fail this, still return the alert
+    if ($tokenlist && (!$token || ($tokenlist !~ m/$token/))) { 
+        print STDERR "Failed token check\n";
+        return ($alert, 0); 
+    }
+
+    # Finally, if we pass the token check, now we do the real crypto
+    # Write the MIME entity to be signed out to a temporary file
+    my $smimefile = `mktemp alert-decoding-tmp-XXX`;
+    chomp $smimefile;
+    open(SMIME, ">$smimefile");
+    print SMIME $smime;
+    close(SMIME);
+    my $result = `openssl cms -verify -in $smimefile -certfile $certfile -CAfile $cafile 2>&1 >/dev/null`;
+    `rm $smimefile`;
+    if ($result =~ /Verification successful/) {
+        return ($alert, 1);
+    } else {
+        print STDERR "Failed CMS verification\n";
+        return ($alert, 0);
+    }
+}
+
+# Quick read/write subroutines
+sub readall($) {
+    my $text = "";
+    open(FILE, "<$_[0]");
+    while (<FILE>) { $text .= $_; }
+    close(FILE);
+    return $text;
+}
+sub readall_stdin() {
+    my $text = "";
+    while (<>) { $text .= $_; }
+    return $text;
+}
+sub writeall($$) {
+    open(FILE, ">$_[1]");
+    print FILE "$_[0]";
+    close(FILE);
+}
+sub writeall_stdout($) {
+    print "$_[0]";
+}
+
+
+
+BEGIN:
+
+# Command line options
+my $usage = <<END
+Usage:
+  escape sign [-in <file>] [-out <file>] [-certfile <file>] [-gzip] [-token <token>]
+  escape verify [-in <file>] [-certfile <file>] [-CAfile <file>] [-tokenfile <file>]
+END
+;
+
+my $verb = shift @ARGV;
+if ($verb !~ /^sign|verify$/) {
+    die($usage);
+}
+
+my %options = ();
+my %param = ( # 2 iff it taks a value
+    "-in" => 2,
+    "-out" => 2,
+    "-token" => 2,
+    "-certfile" => 2,
+    "-CAfile" => 2,
+    "-tokenfile" => 2,
+    "-gzip" => 1
+);
+my @flags = ("-gzip");
+while (@ARGV) { 
+    my $opt = shift @ARGV;
+    if (!$param{$opt}) { die("Unknown parameter $opt\n$usage"); }
+    if ($param{$opt} eq 2) { $options{$opt} = shift @ARGV; }
+    else { $options{$opt} = 1; }
+}
+foreach my $opt (keys %param) {
+    if (($param{$opt} eq 1)&&(!$options{$opt})) { $options{$opt} = 0; }
+}
+
+# Perform processing according to the verb
+if ($verb eq "help") {
+    print "$usage\n";
+} elsif ($verb eq "sign") {
+    if (!$options{"-certfile"}) { die("Need a certificate file"); }
+
+    # Read in the alert text
+    my $alert = "";
+    if ($options{"-in"}) { $alert = readall($options{"-in"}); }
+    else { $alert = readall_stdin(); }
+
+    my $smime = sign_alert($options{"-certfile"}, $alert, $options{"-gzip"}, $options{"-token"} );
+    if ($options{"-out"}) { writeall($smime, $options{"-out"}); }
+    else { writeall_stdout($smime); }
+
+} elsif ($verb eq "verify") {
+    if (!$options{"-certfile"}) { die("Need a certificate file"); }
+    if (!$options{"-CAfile"}) { die("Need a CA file"); }
+
+    # Read in token list
+    my $tokenlist = "";
+    if ($options{"-tokenfile"}) {
+        my $file = $options{"-tokenfile"};
+        $tokenlist = `cat $file`;
+        chomp $tokenlist;
+    }
+
+    # Read in the S/MIME text
+    my $smime = "";
+    if ($options{"-in"}) { $smime = readall($options{"-in"}); }
+    else { $smime = readall_stdin(); }
+
+    # Verify the alert
+    my ($alert, $result) = verify_alert($options{"-certfile"}, $options{"-CAfile"}, $smime, $tokenlist);
+
+    if ($result eq 1) {
+        if ($options{"-out"}) { writeall($alert, $options{"-out"}); }
+        else { writeall_stdout($alert); }
+        print STDERR "Verification successful\n";
+    } else {
+        print STDERR "Verification failure\n";
+    }
+}
+
+
+

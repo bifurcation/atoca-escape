@@ -1,0 +1,66 @@
+Content-Type: multipart/signed; protocol="application/pkcs7-signature"; micalg="sha1"; boundary="----C16CFF6F1CB606631B8BBD4B5B43051F"
+
+------C16CFF6F1CB606631B8BBD4B5B43051F
+Alert-Token: asdfasdfasdf
+Content-Type: application/cap+xml
+
+<?xml version = "1.0" encoding = "UTF-8"?> 
+<alert xmlns = "urn:oasis:names:tc:emergency:cap:1.1"> 
+ <identifier>43b080713727</identifier>   
+ <sender>hsas@dhs.gov</sender>   
+ <sent>2003-04-02T14:39:01-05:00</sent> 
+ <status>Actual</status>   
+ <msgType>Alert</msgType> 
+ <scope>Public</scope>   
+ <info> 
+   <category>Security</category>     
+   <event>Homeland Security Advisory System Update</event>     
+   <urgency>Immediate</urgency>     
+   <severity>Severe</severity>     
+   <certainty>Likely</certainty>     
+   <senderName>U.S. Government, 
+   Department of Homeland Security</senderName> 
+   <headline>Homeland Security Sets Code ORANGE</headline> 
+   <description>The Department of Homeland Security has 
+   elevated the Homeland Security Advisory System threat level
+   to ORANGE / High in response to intelligence which may 
+   indicate a heightened threat of terrorism.</description> 
+   <instruction> A High Condition is declared when there is a 
+   high risk of terrorist attacks. In addition to the 
+   Protective Measures taken in the previous Threat Conditions, 
+   Federal departments and agencies should consider agency-
+   specific Protective Measures in accordance with their 
+   existing plans.</instruction>   
+   <web>http://www.dhs.gov/dhspublic/display?theme=29</web> 
+   <parameter> 
+     <valueName>HSAS</valueName> 
+     <value>ORANGE</value> 
+   </parameter>     
+   <resource> 
+     <resourceDesc>Image file (GIF)</resourceDesc>     
+     <uri>http://www.dhs.gov/dhspublic/getAdvisoryImage</uri> 
+   </resource>     
+   <area>         
+     <areaDesc>U.S. nationwide and interests worldwide</areaDesc>     
+   </area>  
+ </info> 
+</alert>
+
+------C16CFF6F1CB606631B8BBD4B5B43051F
+Content-Type: application/pkcs7-signature; name="smime.p7s"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7s"
+
+MIIBxQYJKoZIhvcNAQcCoIIBtjCCAbICAQMxCTAHBgUrDgMCGjALBgkqhkiG9w0B
+BwExggGTMIIBjwIBA4AUKcxEepHj4Yr7+WDTS28DWxXcIvMwBwYFKw4DAhqggdgw
+GAYJKoZIhvcNAQkDMQsGCSqGSIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMTExMDA0
+MTUzMzM4WjAjBgkqhkiG9w0BCQQxFgQUG0dU/Z+LJg/29/4nvzkou4Bion4weQYJ
+KoZIhvcNAQkPMWwwajALBglghkgBZQMEASowCwYJYIZIAWUDBAEWMAsGCWCGSAFl
+AwQBAjAKBggqhkiG9w0DBzAOBggqhkiG9w0DAgICAIAwDQYIKoZIhvcNAwICAUAw
+BwYFKw4DAgcwDQYIKoZIhvcNAwICASgwDQYJKoZIhvcNAQEBBQAEgYBDIjpmJ2uP
+nbFJqb35p7dGKdoWyh0Q0LUKr9SxOWkmvK9K6AB/Bodzlo1U5hGVqX10p7HqUWW9
+SMt3DXB8sxSbEOrD0HUsdsQvmoulfWNAX5ZphS7jvy1LeR9qrYp8zyzUd1bWSOZA
+kQKwpg6PRyVYArqG8uAD00CW0elL34WKLQ==
+
+------C16CFF6F1CB606631B8BBD4B5B43051F--
+

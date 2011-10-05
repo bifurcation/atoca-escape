@@ -1,0 +1,28 @@
+README
+------
+
+This is a proof of concept implementation of the ESCAPE format for 
+encapsulating secure CAP entities.  
+<http://tools.ietf.org/html/draft-barnes-atoca-escape>
+
+Usage:
+  escape sign [-in <file>] [-out <file>] [-certfile <file>] [-gzip] [-token <token>]
+  escape verify [-in <file>] [-certfile <file>] [-CAfile <file>] [-tokenfile <file>]
+
+Requirements:
+-- IO::Compress::Gzip
+-- IO::Compress::Gunzip
+-- MIME::Base64
+-- MIME::Parser
+-- openssl command line tool
+
+Executables:
+-- escape : Signs and verifies ESCAPE objects
+-- create-signer.sh : Creates a key pair and self-signed certificate that can be used to sign alerts
+
+Examples:
+-- cert1.pem : Pre-generated signing certificate and private key
+-- sample.cap : A sample CAP message
+-- sample.cap.signed : An ESCAPE encapsulation of sample.cap
+-- sample.cap.signed.bad : An ESCAPE encapsulation with an invalid signature
+-- sample.cap.signed.nogzip : An ESCAPE encapsulation that does not use the gzip encoding
